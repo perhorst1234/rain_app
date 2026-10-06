@@ -2,6 +2,9 @@ import SwiftUI
 
 struct RainPopoverView: View {
     @ObservedObject var rainService: RainService
+    @ObservedObject var weatherService: WeatherService
+    let refresh: () -> Void
+    @AppStorage("selectedForecastTab") private var selectedTab = 0
     @StateObject private var locationManager = LocationManager()
     @State private var hoveredIndex: Int?
     @State private var showLocationPicker = false
@@ -9,7 +12,16 @@ struct RainPopoverView: View {
     var body: some View {
         VStack(spacing: 12) {
             headerView
-            if rainService.isLoading && rainService.readings.isEmpty {
+            Picker("Vooruitzicht", selection: $selectedTab) {
+                Label("Regen", systemImage: "cloud.rain").tag(0)
+                Label("Weer", systemImage: "sun.max").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.large)
+            if selectedTab == 1 {
+                WeatherView(service: weatherService, refresh: refresh)
+            } else if rainService.isLoading && rainService.readings.isEmpty {
                 loadingView
             } else if let error = rainService.errorMessage, rainService.readings.isEmpty {
                 errorView(error)
@@ -18,7 +30,27 @@ struct RainPopoverView: View {
             }
         }
         .padding(16)
-        .frame(width: 440, height: 360)
+        .frame(width: 460, height: 560)
+        .environment(\.locale, Locale(identifier: "nl_NL"))
+        .onChange(of: locationManager.currentLocation) { _, newLocation in
+            guard let location = newLocation else { return }
+            let name = locationManager.cityName ?? "Huidige locatie"
+            rainService.updateFromCurrentLocation(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude,
+                cityName: name
+            )
+            refresh()
+            showLocationPicker = false
+        }
+        .onChange(of: locationManager.cityName) { _, newName in
+            guard let name = newName, rainService.usesCurrentLocation else { return }
+            rainService.location = LocationConfig(
+                name: name,
+                latitude: rainService.location.latitude,
+                longitude: rainService.location.longitude
+            )
+        }
     }
 
     // MARK: - Header
@@ -30,6 +62,7 @@ struct RainPopoverView: View {
                     Image(systemName: rainService.usesCurrentLocation ? "location.fill" : "mappin.circle.fill")
                         .font(.system(size: 11))
                     Text(rainService.location.name)
+                        .lineLimit(1)
                         .font(.system(size: 13, weight: .semibold))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .bold))
@@ -46,20 +79,20 @@ struct RainPopoverView: View {
 
             Spacer()
 
-            if rainService.isLoading {
+            if rainService.isLoading || weatherService.isLoading {
                 ProgressView()
                     .controlSize(.small)
                     .scaleEffect(0.7)
             }
 
-            if let lastUpdated = rainService.lastUpdated {
+            if let lastUpdated = selectedTab == 0 ? rainService.lastUpdated : weatherService.lastUpdated {
                 Text(lastUpdated, formatter: timeFormatter)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
 
             Button(action: {
-                Task { await rainService.fetchRainData() }
+                refresh()
             }) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 11, weight: .medium))
@@ -67,6 +100,8 @@ struct RainPopoverView: View {
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive())
+            .help("Verversen")
+            .accessibilityLabel("Verversen")
 
             Button(action: {
                 NSApplication.shared.terminate(nil)
@@ -77,6 +112,8 @@ struct RainPopoverView: View {
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive())
+            .help("RainBar afsluiten")
+            .accessibilityLabel("RainBar afsluiten")
         }
     }
 
@@ -91,7 +128,7 @@ struct RainPopoverView: View {
                     Image(systemName: "location.fill")
                         .font(.system(size: 10))
                         .foregroundColor(.accentColor)
-                    Text("Current Location")
+                    Text("Huidige locatie")
                         .font(.system(size: 12))
                     Spacer()
                     if locationManager.isLocating {
@@ -126,7 +163,7 @@ struct RainPopoverView: View {
                 Button(action: {
                     rainService.selectCity(city)
                     showLocationPicker = false
-                    Task { await rainService.fetchRainData() }
+                    refresh()
                 }) {
                     HStack {
                         Text(city.name)
@@ -147,25 +184,7 @@ struct RainPopoverView: View {
         }
         .padding(.vertical, 6)
         .frame(width: 200)
-        .onChange(of: locationManager.currentLocation) { newLocation in
-            guard let location = newLocation else { return }
-            let name = locationManager.cityName ?? "Current Location"
-            rainService.updateFromCurrentLocation(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude,
-                cityName: name
-            )
-            Task { await rainService.fetchRainData() }
-            showLocationPicker = false
-        }
-        .onChange(of: locationManager.cityName) { newName in
-            guard let name = newName, rainService.usesCurrentLocation else { return }
-            rainService.location = LocationConfig(
-                name: name,
-                latitude: rainService.location.latitude,
-                longitude: rainService.location.longitude
-            )
-        }
+
     }
 
     // MARK: - Status Summary
@@ -180,32 +199,32 @@ struct RainPopoverView: View {
 
                 if let firstReading = rainService.readings.first, firstReading.mmPerHour > 0 {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Raining now")
+                        Text("Het regent nu")
                             .font(.system(size: 13, weight: .semibold))
                         if let stops = rainService.rainStopsTime {
-                            Text("Stops around \(stops)")
+                            Text("Droog rond \(stops)")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                     }
                 } else if let nextRain = rainService.nextRainTime {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Rain expected")
+                        Text("Regen verwacht")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Starting at \(nextRain)")
+                        Text("Vanaf \(nextRain)")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
                 }
             } else {
-                Image(systemName: "sun.max.fill")
+                Image(systemName: "cloud")
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
                     .font(.system(size: 18))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("No rain expected")
+                    Text("Geen regen verwacht")
                         .font(.system(size: 13, weight: .semibold))
-                    Text("Next 2 hours")
+                    Text("Komende 2 uur")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -224,7 +243,14 @@ struct RainPopoverView: View {
             statusSummaryView
             graphSection
             tooltipView
+            if let error = rainService.errorMessage {
+                Text(error).font(.system(size: 10)).foregroundStyle(.orange)
+            }
+            Spacer(minLength: 0)
+            Text("Regenverwachting per 5 minuten · Buienradar")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var graphSection: some View {
@@ -252,7 +278,7 @@ struct RainPopoverView: View {
                 let graphHeight = geometry.size.height
                 let hasAnyRain = readings.contains { $0.mmPerHour > 0 }
                 let maxMM = max(readings.map(\.mmPerHour).max() ?? 1, 2.0)
-                let stepX = graphWidth / CGFloat(readings.count - 1)
+                let stepX = graphWidth / CGFloat(max(readings.count - 1, 1))
 
                 ZStack(alignment: .topLeading) {
                     gridLines(graphHeight: graphHeight)
@@ -262,7 +288,7 @@ struct RainPopoverView: View {
                         strokeLine(readings: readings, maxMM: maxMM, stepX: stepX, graphHeight: graphHeight)
                         hoverDots(readings: readings, maxMM: maxMM, stepX: stepX, graphHeight: graphHeight)
                     } else {
-                        Text("No rain in the next 2 hours")
+                        Text("Geen regen in de komende 2 uur")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -273,7 +299,7 @@ struct RainPopoverView: View {
                 }
             }
         }
-        .frame(height: 130)
+        .frame(height: 200)
     }
 
     private func gridLines(graphHeight: CGFloat) -> some View {
@@ -321,7 +347,7 @@ struct RainPopoverView: View {
                 }
             }
             if inRainSegment {
-                let lastX = CGFloat(readings.count - 1) * stepX
+                let lastX = CGFloat(max(readings.count - 1, 1)) * stepX
                 path.addLine(to: CGPoint(x: lastX, y: graphHeight))
                 path.closeSubpath()
             }
@@ -404,7 +430,7 @@ struct RainPopoverView: View {
             if let nowIdx = findNowIndex(readings: readings) {
                 let x = CGFloat(nowIdx) * stepX
                 VStack(spacing: 2) {
-                    Text("NOW")
+                    Text("NU")
                         .font(.system(size: 7, weight: .heavy, design: .rounded))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4)
@@ -445,7 +471,7 @@ struct RainPopoverView: View {
 
         return AnyView(
             GeometryReader { geo in
-                let stepX = geo.size.width / CGFloat(readings.count - 1)
+                let stepX = geo.size.width / CGFloat(max(readings.count - 1, 1))
                 ZStack(alignment: .leading) {
                     ForEach(Array(readings.enumerated()), id: \.offset) { index, reading in
                         if index % labelInterval == 0 {
@@ -475,7 +501,7 @@ struct RainPopoverView: View {
                         Circle()
                             .fill(dotColor(for: reading))
                             .frame(width: 6, height: 6)
-                        Text(String(format: "%.1f mm/h", reading.mmPerHour))
+                        Text("\(reading.mmPerHour.formatted(.number.locale(Locale(identifier: "nl_NL")).precision(.fractionLength(1)))) mm/u")
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                     }
                     Text(reading.description)
@@ -488,7 +514,7 @@ struct RainPopoverView: View {
                 .glassEffect(in: .rect(cornerRadius: 10))
             } else {
                 HStack {
-                    Text("Hover graph for details")
+                    Text("Beweeg over de grafiek voor details")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                     Spacer()
@@ -509,7 +535,7 @@ struct RainPopoverView: View {
             Spacer()
             ProgressView()
                 .controlSize(.regular)
-            Text("Loading rain data...")
+            Text("Regen ophalen…")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             Spacer()
@@ -527,8 +553,8 @@ struct RainPopoverView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Retry") {
-                Task { await rainService.fetchRainData() }
+            Button("Opnieuw proberen") {
+                refresh()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
@@ -556,13 +582,15 @@ struct RainPopoverView: View {
     }
 
     private func findNowIndex(readings: [RainReading]) -> Int? {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        let nowString = formatter.string(from: Date())
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        let components = calendar.dateComponents([.hour, .minute], from: Date())
+        let now = (components.hour ?? 0) * 60 + (components.minute ?? 0)
         for (index, reading) in readings.enumerated() {
-            if reading.time >= nowString {
-                return index
-            }
+            let parts = reading.time.split(separator: ":")
+            guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]) else { continue }
+            let minutesAhead = (hour * 60 + minute - now + 1440) % 1440
+            if minutesAhead <= 120 { return index }
         }
         return nil
     }
@@ -570,6 +598,8 @@ struct RainPopoverView: View {
     private var timeFormatter: DateFormatter {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
+        f.locale = Locale(identifier: "nl_NL")
+        f.timeZone = TimeZone(identifier: "Europe/Amsterdam")
         return f
     }
 }

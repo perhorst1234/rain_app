@@ -1,32 +1,52 @@
-# RainBar
+# RainBar Nederlands
 
-A macOS menu bar app that shows rain forecasts for locations in the Netherlands, powered by [Buienradar](https://www.buienradar.nl).
+Lokale uitbreiding van [RainBar van Nicolò Candiani](https://github.com/nicolocandiani/rain_app), versie 1.1.0.
 
-![macOS 26+](https://img.shields.io/badge/macOS-26%2B-blue)
-![Swift](https://img.shields.io/badge/Swift-5-orange)
+- Nederlandstalige menubalk en bediening, met actuele temperatuur naast regenstatus.
+- **Regen**: Buienradar-verwachting per vijf minuten voor de komende twee uur.
+- **Weer**: huidige temperatuur, gevoelstemperatuur, dag-/nachtsymbolen, temperatuurverloop voor twaalf uur en een vijfdaags vooruitzicht met minimum, maximum en zonuren.
+- Gedeelde locatiekeuze en automatische verversing elke vijf minuten. De laatst gekozen tab blijft bewaard.
+- Native macOS-glasstijl in beide tabs.
 
-## Features
+Weerdata: [Open-Meteo](https://open-meteo.com/), met [API-documentatie](https://open-meteo.com/en/docs). Zonuren zijn verwachte uren zon voor de volledige dag, geen zonkanspercentage. Regengegevens: [Buienradar](https://www.buienradar.nl/). Geen API-sleutel nodig. Locatievoorzieningen zijn optioneel; je kunt een stad kiezen.
 
-- **Menu bar status** — shows current rain intensity (mm/h) when raining, upcoming rain time, or "Dry"
-- **Rain timeline graph** — 2-hour forecast with smooth area chart, only drawn where rain occurs
-- **Interactive hover** — vertical indicator line with dot and glow on rain segments, tooltip with time, mm/h, and description
-- **"Now" marker** — red pill indicator showing current time on the graph
-- **Location picker** — 8 preset Dutch cities (Amsterdam, Rotterdam, Utrecht, Den Haag, Eindhoven, Groningen, Maastricht, Arnhem)
-- **Current location** — uses macOS Location Services to detect your city via reverse geocoding
-- **Auto-refresh** — data updates every 5 minutes and on each popover open
-- **Liquid glass UI** — native macOS 26 glass effects on buttons, cards, and tooltips
+## Downloaden en installeren
 
-## Data Source
+Download [RainBar-NL-v1.1.0-universal.zip](https://github.com/perhorst1234/rain_app/releases/download/v1.1.0/RainBar-NL-v1.1.0-universal.zip) uit [Releases](https://github.com/perhorst1234/rain_app/releases).
 
-Rain intensity data comes from the Buienradar rain text API (`gpsgadget.buienradar.nl/data/raintext`), which provides 24 five-minute readings covering a 2-hour forecast window. Intensity values (0–255) are converted to mm/h using the formula `10^((value - 109) / 32)`.
+1. Gebruik een Mac met **macOS 26 (Tahoe) of nieuwer**. De download bevat zowel Intel (`x86_64`) als Apple Silicon (`arm64`); Rosetta is niet nodig op Apple Silicon.
+2. Pak de ZIP uit en sleep **RainBar.app** naar **Programma’s**.
+3. Start RainBar. De app verschijnt in de menubalk. Kies een stad en wissel tussen **Regen** en **Weer**.
 
-## Building
+Deze persoonlijke build is ad-hoc ondertekend en niet door Apple genotariseerd. Als macOS de eerste keer openen blokkeert, kun je na de eerste startpoging via **Systeeminstellingen → Privacy en beveiliging → Open toch** toestemming geven voor deze app. Zie [Apple’s instructies](https://support.apple.com/102445). Een Developer ID-certificaat is niet inbegrepen.
 
-1. Open `RainBar.xcodeproj` in Xcode 26+
-2. Build and run (⌘R)
+De `SHA256SUMS.txt` bij de release bevat de checksum van de download. De originele broncode en MIT-licentie blijven behouden in deze fork.
 
-The app requires macOS 26 (Tahoe) or later.
+## Bouwen
 
-## License
+macOS 26+ en Xcode 26+ vereist. Open `RainBar.xcodeproj` en bouw RainBar, of bouw lokaal voor Intel en Apple Silicon:
 
-MIT
+```sh
+xcodebuild -project RainBar.xcodeproj -scheme RainBar -configuration Release \
+  -destination 'generic/platform=macOS' -derivedDataPath build \
+  ARCHS='x86_64 arm64' ONLY_ACTIVE_ARCH=NO CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= build
+```
+
+App staat daarna in `build/Build/Products/Release/RainBar.app`. Dit is een lokale ad-hoc ondertekende build.
+
+## Functionele checks
+
+Voer uit vanuit deze broncodemap:
+
+```sh
+swiftc -parse-as-library RainBar/RainService.swift RainBar/WeatherService.swift \
+  Tests/ForecastChecks.swift -o /tmp/rainbar-checks
+/tmp/rainbar-checks
+```
+
+Checks testen JSON-decoding, zonuren, nachtweergave, Nederlandse regenstatus, foutafhandeling, locatie-wissels en vertraagde antwoorden. De laatste twee checks halen live gegevens op van Open-Meteo en Buienradar.
+
+## Licentie
+
+MIT; zie LICENSE. Open-Meteo-data valt onder de voorwaarden van Open-Meteo, met bronvermelding in de app.

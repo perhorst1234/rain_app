@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct RainReading: Identifiable {
     let id = UUID()
@@ -11,12 +12,12 @@ struct RainReading: Identifiable {
     }
 
     var description: String {
-        if mmPerHour == 0 { return "Dry" }
-        if mmPerHour < 0.5 { return "Light drizzle" }
-        if mmPerHour < 2.0 { return "Light rain" }
-        if mmPerHour < 5.0 { return "Moderate rain" }
-        if mmPerHour < 10.0 { return "Heavy rain" }
-        return "Very heavy rain"
+        if mmPerHour == 0 { return "Droog" }
+        if mmPerHour < 0.5 { return "Motregen" }
+        if mmPerHour < 2.0 { return "Lichte regen" }
+        if mmPerHour < 5.0 { return "Matige regen" }
+        if mmPerHour < 10.0 { return "Zware regen" }
+        return "Zeer zware regen"
     }
 }
 
@@ -42,6 +43,7 @@ struct LocationConfig {
 
 @MainActor
 class RainService: ObservableObject {
+    private var requestID = UUID()
     @Published var readings: [RainReading] = []
     @Published var lastUpdated: Date?
     @Published var isLoading = false
@@ -53,6 +55,13 @@ class RainService: ObservableObject {
     }
     @Published var location: LocationConfig {
         didSet {
+            if oldValue.latitude != location.latitude || oldValue.longitude != location.longitude {
+                requestID = UUID()
+                readings = []
+                lastUpdated = nil
+                errorMessage = nil
+                isLoading = false
+            }
             UserDefaults.standard.set(location.name, forKey: "selectedCity")
             UserDefaults.standard.set(location.latitude, forKey: "selectedLat")
             UserDefaults.standard.set(location.longitude, forKey: "selectedLon")
@@ -85,16 +94,16 @@ class RainService: ObservableObject {
     }
 
     var menuBarText: String {
-        if readings.isEmpty { return "..." }
+        if readings.isEmpty { return errorMessage == nil ? "…" : "Geen data" }
         if isRainingNow {
             let mm = currentRainMM
-            if mm < 0.1 { return "0.1 mm/h" }
-            return String(format: "%.1f mm/h", mm)
+            if mm < 0.1 { return "0,1 mm/u" }
+            return "\(mm.formatted(.number.locale(Locale(identifier: "nl_NL")).precision(.fractionLength(1)))) mm/u"
         }
         if let nextRain = nextRainTime {
-            return "Rain \(nextRain)"
+            return "Regen \(nextRain)"
         }
-        return "Dry"
+        return "Droog"
     }
 
     init() {
@@ -104,7 +113,7 @@ class RainService: ObservableObject {
         if savedUsesCurrentLocation, UserDefaults.standard.object(forKey: "selectedLat") != nil {
             let lat = UserDefaults.standard.double(forKey: "selectedLat")
             let lon = UserDefaults.standard.double(forKey: "selectedLon")
-            let name = UserDefaults.standard.string(forKey: "selectedCity") ?? "Current Location"
+            let name = UserDefaults.standard.string(forKey: "selectedCity") ?? "Huidige locatie"
             self.location = LocationConfig(name: name, latitude: lat, longitude: lon)
         } else if let savedName = UserDefaults.standard.string(forKey: "selectedCity"),
            let savedCity = LocationConfig.allCities.first(where: { $0.name == savedName }) {
@@ -112,7 +121,7 @@ class RainService: ObservableObject {
         } else if UserDefaults.standard.object(forKey: "selectedLat") != nil {
             let lat = UserDefaults.standard.double(forKey: "selectedLat")
             let lon = UserDefaults.standard.double(forKey: "selectedLon")
-            let name = UserDefaults.standard.string(forKey: "selectedCity") ?? "Custom"
+            let name = UserDefaults.standard.string(forKey: "selectedCity") ?? "Eigen locatie"
             self.location = LocationConfig(name: name, latitude: lat, longitude: lon)
         } else {
             self.location = .amsterdam
@@ -129,44 +138,41 @@ class RainService: ObservableObject {
         location = city
     }
 
-    func fetchRainData() async {
+    func fetchRainData(session: URLSession = .shared) async {
+        let id = UUID()
+        requestID = id
         isLoading = true
         errorMessage = nil
-
+        defer { if requestID == id { isLoading = false } }
         let urlString = "https://gpsgadget.buienradar.nl/data/raintext?lat=\(location.latitude)&lon=\(location.longitude)"
         guard let url = URL(string: urlString) else {
-            errorMessage = "Invalid URL"
-            isLoading = false
+            errorMessage = "Ongeldig regenadres."
             return
         }
-
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            guard let text = String(data: data, encoding: .utf8) else {
-                errorMessage = "Could not decode response"
-                isLoading = false
-                return
-            }
-
-            let lines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
-            var newReadings: [RainReading] = []
-
-            for line in lines {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                  let text = String(data: data, encoding: .utf8) else { throw ForecastError.invalidData }
+            let newReadings = text.components(separatedBy: .newlines).compactMap { line -> RainReading? in
                 let parts = line.components(separatedBy: "|")
-                guard parts.count == 2,
-                      let intensity = Double(parts[0].trimmingCharacters(in: .whitespaces)) else {
-                    continue
-                }
+                guard parts.count == 2, let intensity = Double(parts[0]), (0...255).contains(intensity) else { return nil }
                 let time = parts[1].trimmingCharacters(in: .whitespaces)
-                newReadings.append(RainReading(time: time, intensity: intensity))
+                let clock = time.split(separator: ":")
+                guard clock.count == 2, clock[0].count == 2, clock[1].count == 2,
+                      let hour = Int(clock[0]), (0...23).contains(hour),
+                      let minute = Int(clock[1]), (0...59).contains(minute) else { return nil }
+                return RainReading(time: time, intensity: intensity)
             }
-
+            guard newReadings.count >= 2 else { throw ForecastError.invalidData }
+            try Task.checkCancellation()
+            guard requestID == id else { return }
             readings = newReadings
             lastUpdated = Date()
-            isLoading = false
         } catch {
-            errorMessage = "Network error: \(error.localizedDescription)"
-            isLoading = false
+            guard requestID == id, !Task.isCancelled else { return }
+            errorMessage = "Regen ophalen mislukt. Controleer je verbinding en probeer opnieuw."
         }
     }
 }

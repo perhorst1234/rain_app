@@ -21,6 +21,8 @@ class LocationManager: NSObject, ObservableObject {
     func requestLocation() {
         isLocating = true
         error = nil
+        cityName = nil
+        geocoder.cancelGeocode()
 
         switch manager.authorizationStatus {
         case .notDetermined:
@@ -28,7 +30,7 @@ class LocationManager: NSObject, ObservableObject {
         case .authorizedAlways, .authorized:
             manager.requestLocation()
         case .denied, .restricted:
-            error = "Location access denied. Enable it in System Settings > Privacy > Location Services."
+            error = "Locatietoegang geweigerd. Schakel dit in via Systeeminstellingen > Privacy en beveiliging > Locatievoorzieningen."
             isLocating = false
         @unknown default:
             manager.requestWhenInUseAuthorization()
@@ -40,9 +42,9 @@ class LocationManager: NSObject, ObservableObject {
             Task { @MainActor in
                 guard let self = self else { return }
                 if let placemark = placemarks?.first {
-                    self.cityName = placemark.locality ?? placemark.subAdministrativeArea ?? "Current Location"
+                    self.cityName = placemark.locality ?? placemark.subAdministrativeArea ?? "Huidige locatie"
                 } else {
-                    self.cityName = "Current Location"
+                    self.cityName = "Huidige locatie"
                 }
             }
         }
@@ -61,7 +63,7 @@ extension LocationManager: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            self.error = "Could not determine location."
+            self.error = "Locatie bepalen mislukt."
             self.isLocating = false
         }
     }
