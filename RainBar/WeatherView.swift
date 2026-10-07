@@ -155,6 +155,7 @@ struct WeatherView: View {
                             .font(.system(size: 10, design: .rounded)).frame(width: 62, alignment: .trailing)
                         Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).foregroundStyle(.tertiary)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .frame(height: 27)

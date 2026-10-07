@@ -1,6 +1,6 @@
 # RainBar Nederlands
 
-Lokale uitbreiding van [RainBar van Nicolò Candiani](https://github.com/nicolocandiani/rain_app), versie 1.2.0.
+Lokale uitbreiding van [RainBar van Nicolò Candiani](https://github.com/nicolocandiani/rain_app), versie 1.2.1.
 
 - Nederlandstalige menubalk en bediening, met actuele temperatuur naast regenstatus.
 - **Regen**: Buienradar-verwachting per vijf minuten voor de komende twee uur.
@@ -15,7 +15,7 @@ Weerdata: [Open-Meteo](https://open-meteo.com/), met [API-documentatie](https://
 
 ## Downloaden en installeren
 
-Download [RainBar-NL-v1.2.0-universal.zip](https://github.com/perhorst1234/rain_app/releases/download/v1.2.0/RainBar-NL-v1.2.0-universal.zip) uit [Releases](https://github.com/perhorst1234/rain_app/releases).
+Download [RainBar-NL-v1.2.1-universal.zip](https://github.com/perhorst1234/rain_app/releases/download/v1.2.1/RainBar-NL-v1.2.1-universal.zip) uit [Releases](https://github.com/perhorst1234/rain_app/releases).
 
 1. Gebruik een Mac met **macOS 26 (Tahoe) of nieuwer**. De download bevat zowel Intel (`x86_64`) als Apple Silicon (`arm64`); Rosetta is niet nodig op Apple Silicon.
 2. Pak de ZIP uit en sleep **RainBar.app** naar **Programma’s**.
@@ -27,7 +27,7 @@ De `SHA256SUMS.txt` bij de release bevat de checksum van de download. De origine
 
 ## Automatische updates
 
-Installeer versie **1.2.0** eenmalig op iedere Mac. Versie 1.1.0 heeft nog geen updater.
+Installeer versie **1.2.1** eenmalig op iedere Mac. Versie 1.1.0 heeft nog geen updater.
 Daarna controleert RainBar ieder uur de nieuwste release van **perhorst1234/rain_app** en downloadt een ondertekende update automatisch. De installatie gebeurt doorgaans bij afsluiten of herstarten van RainBar; als de app blijft draaien, kan Sparkle later een installatie aanbieden. De app moet in een beschrijfbare map staan, bijvoorbeeld Programma’s.
 
 Rechtsklik op het menubalkicoon voor **Zoek naar updates…** en **Automatisch bijwerken**. Deze voorkeur geldt per Mac. GitHub en een internetverbinding moeten bereikbaar zijn.
@@ -37,7 +37,7 @@ Een wijziging alleen op je computer verschijnt pas op je laptop nadat een nieuwe
 ```sh
 git add RainBar Tests Scripts .github README.md
 git commit -m "Beschrijf je wijziging"
-Scripts/tag-release.sh 1.2.1
+Scripts/tag-release.sh 1.2.2
 ```
 
 Het script verhoogt ook het interne buildnummer en pusht branch en tag samen. GitHub Actions test, bouwt voor Intel én Apple Silicon, ondertekent het updatearchief en publiceert ZIP, checksum en `appcast.xml`. Kies bij volgende releases steeds een hoger versienummer. Wacht op een geslaagde workflow voordat je de release als beschikbaar beschouwt.

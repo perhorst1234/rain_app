@@ -1,8 +1,10 @@
-# Releasecontrole 1.2.0
+# Releasecontrole 1.2.1
 
 Controle uitgevoerd op 7 oktober 2026. Deze versie herstelt de schaal voor lichte regen, plaatst tabs in de bovenbalk, laat de vensterhoogte aansluiten op de inhoud, kiest de openingstab op basis van regen en voegt klikbare dagdetails en Sparkle-updates toe.
 
-CodeRabbit raised 0 issues in de review van appwijzigingen, tests, scripts, package-lock en releaseworkflow. Na de review zijn de laatste aslabels expliciet zichtbaar gemaakt, is automatische tabkeuze beperkt tot de eerste verse voorspelling per opening, is menuvalidatie expliciet ingesteld en is de lipo-argumentvolgorde in het release-script gecorrigeerd. De uiteindelijke build en functionele controles worden opnieuw uitgevoerd.
+CodeRabbit raised 0 issues in de review van appwijzigingen, tests, scripts, package-lock en releaseworkflow. Na de review zijn de laatste aslabels expliciet zichtbaar gemaakt, is automatische tabkeuze beperkt tot de eerste verse voorspelling per opening, is menuvalidatie expliciet ingesteld en is de lipo-argumentvolgorde in het release-script gecorrigeerd. De laatste universele build en 32 offline functionele checks zijn geslaagd. De volledige set van 35 checks, inclusief drie live integratiechecks, wordt voor publicatie nogmaals uitgevoerd. Native NSHostingController bevestigt hoogtes van 375 px (Regen) en 518 px (Weer), beide 500 px breed.
+
+De tweede CodeRabbit-review gaf twee minor opmerkingen: de nog voorlopige validatietekst bijwerken zodra controles klaar zijn, en de volledige dagrij klikbaar maken met `contentShape(Rectangle())`. De dagrij is aangepast; de validatietekst wordt gebaseerd op de uitgevoerde controles.
 
 ## Controles
 
