@@ -1,10 +1,12 @@
 import SwiftUI
+import Charts
 
 struct RainPopoverView: View {
     @ObservedObject var rainService: RainService
     @ObservedObject var weatherService: WeatherService
     let refresh: () -> Void
-    @AppStorage("selectedForecastTab") private var selectedTab = 0
+    @ObservedObject var presentation: PopoverPresentation
+    let onSizeChange: (CGSize) -> Void
     @StateObject private var locationManager = LocationManager()
     @State private var hoveredIndex: Int?
     @State private var showLocationPicker = false
@@ -12,15 +14,8 @@ struct RainPopoverView: View {
     var body: some View {
         VStack(spacing: 12) {
             headerView
-            Picker("Vooruitzicht", selection: $selectedTab) {
-                Label("Regen", systemImage: "cloud.rain").tag(0)
-                Label("Weer", systemImage: "sun.max").tag(1)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.large)
-            if selectedTab == 1 {
-                WeatherView(service: weatherService, refresh: refresh)
+            if presentation.selectedTab == .weather {
+                WeatherView(service: weatherService, refresh: refresh, presentation: presentation)
             } else if rainService.isLoading && rainService.readings.isEmpty {
                 loadingView
             } else if let error = rainService.errorMessage, rainService.readings.isEmpty {
@@ -29,8 +24,17 @@ struct RainPopoverView: View {
                 rainContentView
             }
         }
-        .padding(16)
-        .frame(width: 460, height: 560)
+        .padding(12)
+        .frame(width: 500)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(GeometryReader { geometry in
+            Color.clear.preference(key: PopoverSizeKey.self, value: geometry.size)
+        })
+        .onPreferenceChange(PopoverSizeKey.self, perform: onSizeChange)
+        .onChange(of: presentation.openingID) { _, _ in
+            showLocationPicker = false
+            hoveredIndex = nil
+        }
         .environment(\.locale, Locale(identifier: "nl_NL"))
         .onChange(of: locationManager.currentLocation) { _, newLocation in
             guard let location = newLocation else { return }
@@ -56,13 +60,15 @@ struct RainPopoverView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             Button(action: { showLocationPicker.toggle() }) {
                 HStack(spacing: 5) {
                     Image(systemName: rainService.usesCurrentLocation ? "location.fill" : "mappin.circle.fill")
                         .font(.system(size: 11))
                     Text(rainService.location.name)
                         .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 105, alignment: .leading)
                         .font(.system(size: 13, weight: .semibold))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .bold))
@@ -77,7 +83,16 @@ struct RainPopoverView: View {
                 locationPickerView
             }
 
-            Spacer()
+            Picker("Vooruitzicht", selection: Binding(
+                get: { presentation.selectedTab }, set: { presentation.select($0) }
+            )) {
+                Text("Regen").tag(ForecastTab.rain)
+                Text("Weer").tag(ForecastTab.weather)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 118)
+            Spacer(minLength: 0)
 
             if rainService.isLoading || weatherService.isLoading {
                 ProgressView()
@@ -85,7 +100,7 @@ struct RainPopoverView: View {
                     .scaleEffect(0.7)
             }
 
-            if let lastUpdated = selectedTab == 0 ? rainService.lastUpdated : weatherService.lastUpdated {
+            if let lastUpdated = presentation.selectedTab == .rain ? rainService.lastUpdated : weatherService.lastUpdated {
                 Text(lastUpdated, formatter: timeFormatter)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
@@ -246,245 +261,93 @@ struct RainPopoverView: View {
             if let error = rainService.errorMessage {
                 Text(error).font(.system(size: 10)).foregroundStyle(.orange)
             }
-            Spacer(minLength: 0)
-            Text("Regenverwachting per 5 minuten · Buienradar")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
+
         }
-        .frame(maxHeight: .infinity, alignment: .top)
+
     }
 
     private var graphSection: some View {
-        VStack(spacing: 0) {
-            rainGraphView
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-                .padding(.bottom, 4)
-            timeLabelsView
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
-        }
-        .glassEffect(in: .rect(cornerRadius: 12))
-    }
-
-    // MARK: - Rain Graph
-
-    private var rainGraphView: some View {
-        GeometryReader { geometry in
-            let readings = rainService.readings
-            if readings.isEmpty {
-                EmptyView()
-            } else {
-                let graphWidth = geometry.size.width
-                let graphHeight = geometry.size.height
-                let hasAnyRain = readings.contains { $0.mmPerHour > 0 }
-                let maxMM = max(readings.map(\.mmPerHour).max() ?? 1, 2.0)
-                let stepX = graphWidth / CGFloat(max(readings.count - 1, 1))
-
-                ZStack(alignment: .topLeading) {
-                    gridLines(graphHeight: graphHeight)
-
-                    if hasAnyRain {
-                        areaFill(readings: readings, maxMM: maxMM, stepX: stepX, graphHeight: graphHeight, graphWidth: graphWidth)
-                        strokeLine(readings: readings, maxMM: maxMM, stepX: stepX, graphHeight: graphHeight)
-                        hoverDots(readings: readings, maxMM: maxMM, stepX: stepX, graphHeight: graphHeight)
-                    } else {
-                        Text("Geen regen in de komende 2 uur")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-
-                    nowIndicator(readings: readings, stepX: stepX, graphHeight: graphHeight)
-                    hoverOverlay(readings: readings, stepX: stepX, graphWidth: graphWidth, graphHeight: graphHeight)
-                }
-            }
-        }
-        .frame(height: 200)
-    }
-
-    private func gridLines(graphHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            ForEach(0..<4, id: \.self) { _ in
-                Spacer()
-                Rectangle()
-                    .fill(.quaternary)
-                    .frame(height: 0.5)
-            }
-        }
-        .frame(height: graphHeight)
-    }
-
-    private func areaFill(readings: [RainReading], maxMM: Double, stepX: CGFloat, graphHeight: CGFloat, graphWidth: CGFloat) -> some View {
-        Path { path in
-            var inRainSegment = false
-            for (i, reading) in readings.enumerated() {
-                let x = CGFloat(i) * stepX
-                let hasRain = reading.mmPerHour > 0
-                let prevHasRain = i > 0 && readings[i - 1].mmPerHour > 0
-
-                if hasRain || prevHasRain {
-                    let y = graphHeight - (CGFloat(reading.mmPerHour) / CGFloat(maxMM)) * graphHeight
-                    if !inRainSegment {
-                        path.move(to: CGPoint(x: x, y: graphHeight))
-                        path.addLine(to: CGPoint(x: x, y: y))
-                        inRainSegment = true
-                    } else {
-                        let prevX = CGFloat(i - 1) * stepX
-                        let prevY = graphHeight - (CGFloat(readings[i - 1].mmPerHour) / CGFloat(maxMM)) * graphHeight
-                        let midX = (prevX + x) / 2
-                        path.addCurve(
-                            to: CGPoint(x: x, y: y),
-                            control1: CGPoint(x: midX, y: prevY),
-                            control2: CGPoint(x: midX, y: y)
-                        )
-                    }
-
-                    if !hasRain {
-                        path.addLine(to: CGPoint(x: x, y: graphHeight))
-                        path.closeSubpath()
-                        inRainSegment = false
-                    }
-                }
-            }
-            if inRainSegment {
-                let lastX = CGFloat(max(readings.count - 1, 1)) * stepX
-                path.addLine(to: CGPoint(x: lastX, y: graphHeight))
-                path.closeSubpath()
-            }
-        }
-        .fill(
-            LinearGradient(
-                colors: [
-                    Color.blue.opacity(0.4),
-                    Color.cyan.opacity(0.1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-    }
-
-    private func strokeLine(readings: [RainReading], maxMM: Double, stepX: CGFloat, graphHeight: CGFloat) -> some View {
-        Path { path in
-            var inRainSegment = false
-            for (i, reading) in readings.enumerated() {
-                let x = CGFloat(i) * stepX
-                let hasRain = reading.mmPerHour > 0
-                let prevHasRain = i > 0 && readings[i - 1].mmPerHour > 0
-
-                if hasRain || prevHasRain {
-                    let y = graphHeight - (CGFloat(reading.mmPerHour) / CGFloat(maxMM)) * graphHeight
-                    if !inRainSegment {
-                        path.move(to: CGPoint(x: x, y: y))
-                        inRainSegment = true
-                    } else {
-                        let prevX = CGFloat(i - 1) * stepX
-                        let prevY = graphHeight - (CGFloat(readings[i - 1].mmPerHour) / CGFloat(maxMM)) * graphHeight
-                        let midX = (prevX + x) / 2
-                        path.addCurve(
-                            to: CGPoint(x: x, y: y),
-                            control1: CGPoint(x: midX, y: prevY),
-                            control2: CGPoint(x: midX, y: y)
-                        )
-                    }
-
-                    if !hasRain {
-                        inRainSegment = false
-                    }
-                }
-            }
-        }
-        .stroke(Color.blue, lineWidth: 2)
-    }
-
-    private func hoverDots(readings: [RainReading], maxMM: Double, stepX: CGFloat, graphHeight: CGFloat) -> some View {
-        ForEach(Array(readings.enumerated()), id: \.offset) { index, reading in
-            if hoveredIndex == index {
-                let x = CGFloat(index) * stepX
-
-                Rectangle()
-                    .fill(Color.white.opacity(reading.mmPerHour > 0 ? 0.3 : 0.15))
-                    .frame(width: 1, height: graphHeight)
-                    .position(x: x, y: graphHeight / 2)
-
-                if reading.mmPerHour > 0 {
-                    let y = graphHeight - (CGFloat(reading.mmPerHour) / CGFloat(maxMM)) * graphHeight
-
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 20, height: 20)
-                        .position(x: x, y: y)
-
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: .blue.opacity(0.6), radius: 5)
-                        .position(x: x, y: y)
-                }
-            }
-        }
-    }
-
-    private func nowIndicator(readings: [RainReading], stepX: CGFloat, graphHeight: CGFloat) -> some View {
-        Group {
-            if let nowIdx = findNowIndex(readings: readings) {
-                let x = CGFloat(nowIdx) * stepX
-                VStack(spacing: 2) {
-                    Text("NU")
-                        .font(.system(size: 7, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.red.opacity(0.8), in: Capsule())
-                    Rectangle()
-                        .fill(Color.red.opacity(0.4))
-                        .frame(width: 1, height: graphHeight - 14)
-                }
-                .position(x: x, y: graphHeight / 2)
-            }
-        }
-    }
-
-    private func hoverOverlay(readings: [RainReading], stepX: CGFloat, graphWidth: CGFloat, graphHeight: CGFloat) -> some View {
-        Rectangle()
-            .fill(Color.clear)
-            .contentShape(Rectangle())
-            .frame(width: graphWidth, height: graphHeight)
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    let index = Int(round(location.x / stepX))
-                    hoveredIndex = max(0, min(index, readings.count - 1))
-                case .ended:
-                    hoveredIndex = nil
-                }
-            }
-    }
-
-    // MARK: - Time Labels
-
-    private var timeLabelsView: some View {
         let readings = rainService.readings
-        guard !readings.isEmpty else { return AnyView(EmptyView()) }
-
-        let labelInterval = readings.count <= 12 ? 3 : 6
-
-        return AnyView(
-            GeometryReader { geo in
-                let stepX = geo.size.width / CGFloat(max(readings.count - 1, 1))
-                ZStack(alignment: .leading) {
-                    ForEach(Array(readings.enumerated()), id: \.offset) { index, reading in
-                        if index % labelInterval == 0 {
-                            Text(reading.time)
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .position(x: CGFloat(index) * stepX, y: 8)
+        let upper = RainChartScale.upperBound(for: readings)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Regen · mm/u").font(.system(size: 10)).foregroundStyle(.secondary)
+            Chart {
+                ForEach(Array(readings.enumerated()), id: \.offset) { index, reading in
+                    AreaMark(x: .value("Tijd", index), y: .value("Regen", reading.mmPerHour))
+                        .foregroundStyle(LinearGradient(colors: [.cyan.opacity(0.5), .blue.opacity(0.06)], startPoint: .top, endPoint: .bottom))
+                    LineMark(x: .value("Tijd", index), y: .value("Regen", reading.mmPerHour))
+                        .foregroundStyle(.cyan).lineStyle(StrokeStyle(lineWidth: 2))
+                    if reading.mmPerHour > 0 {
+                        PointMark(x: .value("Tijd", index), y: .value("Regen", reading.mmPerHour))
+                            .foregroundStyle(.cyan).symbolSize(18)
+                    }
+                }
+                if let index = findNowIndex(readings: readings) {
+                    RuleMark(x: .value("Nu", index)).foregroundStyle(.red.opacity(0.55))
+                        .annotation(position: .top, alignment: .leading) {
+                            Text("NU").font(.system(size: 7, weight: .bold)).foregroundStyle(.red)
+                        }
+                }
+                if let index = hoveredIndex, readings.indices.contains(index) {
+                    RuleMark(x: .value("Geselecteerd", index)).foregroundStyle(.secondary.opacity(0.4))
+                    PointMark(x: .value("Tijd", index), y: .value("Regen", readings[index].mmPerHour))
+                        .foregroundStyle(.white).symbolSize(40)
+                }
+            }
+            .chartXScale(domain: 0...max(readings.count - 1, 1), range: .plotDimension(padding: 5))
+            .chartYScale(domain: 0...upper)
+            .chartXAxis {
+                AxisMarks(values: timeTickIndices(count: readings.count)) { value in
+                    AxisValueLabel(anchor: value.index == 0 ? .topLeading : value.index == value.count - 1 ? .topTrailing : .top, collisionResolution: .disabled) {
+                        if let index = value.as(Int.self), readings.indices.contains(index) {
+                            Text(readings[index].time).font(.system(size: 9, design: .monospaced))
                         }
                     }
                 }
             }
-            .frame(height: 18)
-        )
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: [0, upper / 2, upper]) { value in
+                    AxisGridLine().foregroundStyle(.quaternary)
+                    AxisValueLabel {
+                        if let mm = value.as(Double.self) {
+                            Text(mm.formatted(.number.locale(Locale(identifier: "nl_NL")).precision(.fractionLength(0...2))))
+                                .font(.system(size: 9, design: .monospaced))
+                        }
+                    }
+                }
+            }
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Color.clear.contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let point):
+                                guard let plot = proxy.plotFrame else { return }
+                                let frame = geometry[plot]
+                                guard frame.contains(point), let value: Double = proxy.value(atX: point.x - frame.minX) else {
+                                    hoveredIndex = nil; return
+                                }
+                                hoveredIndex = min(max(Int(value.rounded()), 0), max(readings.count - 1, 0))
+                            case .ended: hoveredIndex = nil
+                            }
+                        }
+                }
+            }
+            .overlay {
+                if !rainService.hasRainComing {
+                    Text("Geen regen in de komende 2 uur").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: 165)
+            .accessibilityLabel("Regenverwachting per vijf minuten, schaal nul tot \(upper) millimeter per uur")
+        }
+        .padding(12)
+        .glassEffect(in: .rect(cornerRadius: 12))
+    }
+
+    private func timeTickIndices(count: Int) -> [Int] {
+        guard count > 1 else { return [] }
+        return Array(Set([0, (count - 1) / 4, (count - 1) / 2, 3 * (count - 1) / 4, count - 1])).sorted()
     }
 
     // MARK: - Tooltip
@@ -532,19 +395,17 @@ struct RainPopoverView: View {
 
     private var loadingView: some View {
         VStack(spacing: 12) {
-            Spacer()
             ProgressView()
                 .controlSize(.regular)
             Text("Regen ophalen…")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
-            Spacer()
         }
+        .frame(height: 150)
     }
 
     private func errorView(_ message: String) -> some View {
         VStack(spacing: 12) {
-            Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 28))
                 .symbolRenderingMode(.hierarchical)
@@ -558,8 +419,8 @@ struct RainPopoverView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            Spacer()
         }
+        .frame(height: 150)
     }
 
     // MARK: - Helpers
@@ -570,15 +431,6 @@ struct RainPopoverView: View {
         if reading.mmPerHour < 5.0 { return .blue }
         if reading.mmPerHour < 10.0 { return Color(red: 0.2, green: 0.2, blue: 0.9) }
         return Color(red: 0.5, green: 0.1, blue: 0.8)
-    }
-
-    private func scaleSteps(for maxMM: Double) -> [Double] {
-        if maxMM <= 1 { return [0.2, 0.5, 1.0] }
-        if maxMM <= 2 { return [0.5, 1.0, 2.0] }
-        if maxMM <= 5 { return [1, 2, 5] }
-        if maxMM <= 10 { return [2, 5, 10] }
-        if maxMM <= 25 { return [5, 10, 25] }
-        return [10, 25, 50]
     }
 
     private func findNowIndex(readings: [RainReading]) -> Int? {
@@ -602,4 +454,9 @@ struct RainPopoverView: View {
         f.timeZone = TimeZone(identifier: "Europe/Amsterdam")
         return f
     }
+}
+
+private struct PopoverSizeKey: PreferenceKey {
+    static var defaultValue = CGSize.zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
 }

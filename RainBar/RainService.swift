@@ -176,3 +176,43 @@ class RainService: ObservableObject {
         }
     }
 }
+
+// A small shower uses a small, explicitly labelled scale instead of disappearing near zero.
+enum RainChartScale {
+    static func upperBound(for readings: [RainReading]) -> Double {
+        let peak = readings.map(\.mmPerHour).max() ?? 0
+        return [0.2, 0.5, 1, 2, 5, 10, 25, 50, 100].first { $0 > peak * 1.1 } ?? ceil(peak * 1.2)
+    }
+}
+
+enum ForecastTab: Int { case rain, weather }
+
+@MainActor
+final class PopoverPresentation: ObservableObject {
+    @Published private(set) var selectedTab: ForecastTab = .weather
+    @Published private(set) var isOpen = false
+    @Published private(set) var openingID = UUID()
+    private var userSelected = false
+    private var refinedOpening = false
+
+    func open(hasRain: Bool) {
+        openingID = UUID()
+        userSelected = false
+        refinedOpening = false
+        isOpen = true
+        selectedTab = hasRain ? .rain : .weather
+    }
+
+    func close() { isOpen = false }
+
+    func select(_ tab: ForecastTab) {
+        userSelected = true
+        selectedTab = tab
+    }
+
+    func updateForecast(hasRain: Bool, opening: UUID) {
+        guard isOpen, opening == openingID, !userSelected, !refinedOpening else { return }
+        refinedOpening = true
+        selectedTab = hasRain ? .rain : .weather
+    }
+}

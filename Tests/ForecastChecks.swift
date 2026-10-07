@@ -52,6 +52,57 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) {
             fatalError("Malformed arrays accepted")
         } catch { print("PASS: mismatched arrays rejected") }
 
+        var enriched = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        var hourly = enriched["hourly"] as! [String: Any]
+        hourly["apparent_temperature"] = Array(repeating: 15.0, count: 120)
+        hourly["precipitation_probability"] = Array(repeating: 40, count: 120)
+        hourly["precipitation"] = Array(repeating: 0.1, count: 120)
+        hourly["wind_speed_10m"] = Array(repeating: 12.0, count: 120)
+        enriched["hourly"] = hourly
+        let detailed = try WeatherForecast.decode(JSONSerialization.data(withJSONObject: enriched))
+        require(detailed.hours[0].rainMM == 0.1 && detailed.hours[0].rainProbability == 40 && detailed.hours[0].windKPH == 12 && detailed.hours[0].feelsLike == 15, "hourly day details decode with units intact")
+        require(forecast.hours[0].rainMM == nil, "missing optional hourly fields stay unavailable")
+        hourly["precipitation"] = []
+        enriched["hourly"] = hourly
+        do {
+            _ = try WeatherForecast.decode(JSONSerialization.data(withJSONObject: enriched))
+            fatalError("Malformed optional array accepted")
+        } catch { print("PASS: mismatched optional arrays rejected") }
+        let day = detailed.days[0]
+        require(detailed.hours(for: day.date).count == 24, "day details include exactly matching calendar day")
+        let evening = detailed.hours(for: day.date, period: .evening)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        require(evening.count == 6 && evening.allSatisfy { calendar.component(.hour, from: $0.date) >= 18 }, "evening selects 18:00 through 23:00")
+        require(detailed.hours(for: day.date, period: .morning).count == 6 && detailed.hours(for: day.date, period: .afternoon).count == 6, "morning and afternoon each contain six hours")
+        let dstStart = calendar.date(from: DateComponents(year: 2026, month: 10, day: 25))!
+        let dstEnd = calendar.date(byAdding: .day, value: 1, to: dstStart)!
+        let dstHours = stride(from: dstStart.timeIntervalSince1970, through: dstEnd.timeIntervalSince1970, by: 3600).map {
+            HourForecast(date: Date(timeIntervalSince1970: $0), temperature: 10, code: 0, isDay: false)
+        }
+        let dst = WeatherForecast(observedAt: dstStart, temperature: 10, feelsLike: 10, code: 0, isDay: false, hours: dstHours, days: [day])
+        require(dst.hours(for: dstStart).count == 25 && dst.hours(for: dstStart, period: .evening).count == 6, "Dutch daylight-saving day keeps both repeated hours and excludes next midnight")
+        let drizzle = [RainReading(time: "21:50", intensity: 77), RainReading(time: "21:55", intensity: 77)]
+        require(RainChartScale.upperBound(for: drizzle) == 0.2, "0.1 mm/h drizzle occupies half a labelled chart")
+        let heavy = [RainReading(time: "12:00", intensity: 200)]
+        require(RainChartScale.upperBound(for: heavy) > heavy[0].mmPerHour, "heavy rain stays inside adaptive chart domain")
+        let presentation = PopoverPresentation()
+        presentation.open(hasRain: false)
+        require(presentation.selectedTab == .weather, "dry opening selects weather")
+        let opening = presentation.openingID
+        presentation.updateForecast(hasRain: true, opening: opening)
+        require(presentation.selectedTab == .rain, "fresh rain data refines opening tab")
+        presentation.updateForecast(hasRain: false, opening: opening)
+        require(presentation.selectedTab == .rain, "later timer refresh does not change automatically opened tab")
+        presentation.select(.weather)
+        presentation.updateForecast(hasRain: true, opening: opening)
+        require(presentation.selectedTab == .weather, "refresh preserves manual tab choice")
+        presentation.close()
+        presentation.open(hasRain: true)
+        require(presentation.selectedTab == .rain, "new rainy opening resets manual choice")
+        presentation.updateForecast(hasRain: false, opening: opening)
+        require(presentation.selectedTab == .rain, "late result from prior opening cannot change tab")
+
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockProtocol.self]
         let session = URLSession(configuration: config)
@@ -100,10 +151,13 @@ func require(_ value: @autoclosure () -> Bool, _ message: String) {
         await oldRain.value
         require(rain.readings.isEmpty, "late rain response ignored after location change")
 
-        await weather.fetch(for: .amsterdam)
-        require(weather.forecast?.days.count == 5 && weather.forecast?.upcomingHours().count == 12, "live Open-Meteo request passes")
-        await rain.fetchRainData()
-        require(rain.readings.count == 24 && rain.errorMessage == nil, "live Buienradar request passes")
+        if !CommandLine.arguments.contains("--offline") {
+            await weather.fetch(for: .amsterdam)
+            require(weather.forecast?.days.count == 5 && weather.forecast?.upcomingHours().count == 12, "live Open-Meteo request passes")
+            await rain.fetchRainData()
+            require(rain.readings.count == 24 && rain.errorMessage == nil, "live Buienradar request passes")
+            require(weather.forecast?.hours.first?.windKPH != nil && weather.forecast?.hours.first?.rainProbability != nil, "live source supplies day detail fields")
+        }
         print("ALL CHECKS PASSED")
     }
 }

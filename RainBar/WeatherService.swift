@@ -43,6 +43,10 @@ struct HourForecast: Identifiable {
     let temperature: Double
     let code: Int
     let isDay: Bool
+    var feelsLike: Double? = nil
+    var rainProbability: Int? = nil
+    var rainMM: Double? = nil
+    var windKPH: Double? = nil
 }
 
 struct DayForecast: Identifiable {
@@ -52,6 +56,19 @@ struct DayForecast: Identifiable {
     let high: Double
     let code: Int
     let sunshineHours: Double?
+}
+
+enum DayPeriod: String, CaseIterable, Identifiable {
+    case all = "Hele dag", morning = "Ochtend", afternoon = "Middag", evening = "Avond"
+    var id: String { rawValue }
+    func contains(hour: Int) -> Bool {
+        switch self {
+        case .all: return true
+        case .morning: return (6..<12).contains(hour)
+        case .afternoon: return (12..<18).contains(hour)
+        case .evening: return (18..<24).contains(hour)
+        }
+    }
 }
 
 struct WeatherForecast {
@@ -68,6 +85,14 @@ struct WeatherForecast {
         return Array(hours.filter { $0.date.timeIntervalSince1970 >= hourStart }.prefix(12))
     }
 
+    func hours(for day: Date, period: DayPeriod = .all) -> [HourForecast] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Amsterdam")!
+        return hours.filter {
+            calendar.isDate($0.date, inSameDayAs: day) && period.contains(hour: calendar.component(.hour, from: $0.date))
+        }
+    }
+
     static func decode(_ data: Data) throws -> WeatherForecast {
         let response = try JSONDecoder().decode(Response.self, from: data)
         let hourly = response.hourly
@@ -78,14 +103,21 @@ struct WeatherForecast {
               daily.time.count == daily.temperature_2m_min.count,
               daily.time.count == daily.temperature_2m_max.count,
               daily.time.count == daily.weather_code.count,
-              daily.time.count == daily.sunshine_duration.count else {
+              daily.time.count == daily.sunshine_duration.count,
+              hourly.apparent_temperature.map({ $0.count == hourly.time.count }) ?? true,
+              hourly.precipitation_probability.map({ $0.count == hourly.time.count }) ?? true,
+              hourly.precipitation.map({ $0.count == hourly.time.count }) ?? true,
+              hourly.wind_speed_10m.map({ $0.count == hourly.time.count }) ?? true else {
             throw ForecastError.invalidData
         }
         let hours = hourly.time.indices.compactMap { i -> HourForecast? in
             guard let temperature = hourly.temperature_2m[i],
                   let code = hourly.weather_code[i], let isDay = hourly.is_day[i] else { return nil }
             return HourForecast(date: Date(timeIntervalSince1970: hourly.time[i]),
-                                temperature: temperature, code: code, isDay: isDay == 1)
+                                temperature: temperature, code: code, isDay: isDay == 1,
+                                feelsLike: hourly.apparent_temperature?[i],
+                                rainProbability: hourly.precipitation_probability?[i],
+                                rainMM: hourly.precipitation?[i], windKPH: hourly.wind_speed_10m?[i])
         }
         let days = daily.time.indices.compactMap { i -> DayForecast? in
             guard let low = daily.temperature_2m_min[i], let high = daily.temperature_2m_max[i],
@@ -117,6 +149,10 @@ struct WeatherForecast {
             let temperature_2m: [Double?]
             let weather_code: [Int?]
             let is_day: [Int?]
+            let apparent_temperature: [Double?]?
+            let precipitation_probability: [Int?]?
+            let precipitation: [Double?]?
+            let wind_speed_10m: [Double?]?
         }
         struct Daily: Decodable {
             let time: [Double]
@@ -146,7 +182,7 @@ final class WeatherService: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var lastUpdated: Date?
     private var requestID = UUID()
-    private var coordinates: String?
+    @Published private(set) var coordinates: String?
 
     func prepare(for location: LocationConfig) {
         let key = "\(location.latitude),\(location.longitude)"
@@ -171,7 +207,7 @@ final class WeatherService: ObservableObject {
             URLQueryItem(name: "latitude", value: String(location.latitude)),
             URLQueryItem(name: "longitude", value: String(location.longitude)),
             URLQueryItem(name: "current", value: "temperature_2m,apparent_temperature,weather_code,is_day"),
-            URLQueryItem(name: "hourly", value: "temperature_2m,weather_code,is_day"),
+            URLQueryItem(name: "hourly", value: "temperature_2m,apparent_temperature,weather_code,is_day,precipitation_probability,precipitation,wind_speed_10m"),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,sunshine_duration"),
             URLQueryItem(name: "timezone", value: "Europe/Amsterdam"),
             URLQueryItem(name: "timeformat", value: "unixtime"),

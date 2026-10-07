@@ -1,3 +1,23 @@
+# Releasecontrole 1.2.0
+
+Controle uitgevoerd op 7 oktober 2026. Deze versie herstelt de schaal voor lichte regen, plaatst tabs in de bovenbalk, laat de vensterhoogte aansluiten op de inhoud, kiest de openingstab op basis van regen en voegt klikbare dagdetails en Sparkle-updates toe.
+
+CodeRabbit raised 0 issues in de review van appwijzigingen, tests, scripts, package-lock en releaseworkflow. Na de review zijn de laatste aslabels expliciet zichtbaar gemaakt, is automatische tabkeuze beperkt tot de eerste verse voorspelling per opening, is menuvalidatie expliciet ingesteld en is de lipo-argumentvolgorde in het release-script gecorrigeerd. De uiteindelijke build en functionele controles worden opnieuw uitgevoerd.
+
+## Controles
+
+- Functionele checks: gegevensdecoding, optionele uurgegevens, afwijzing van verkeerde arraylengtes, zonuren, nachtweergave, dag-/avondfilter, Nederlandse zomertijd, lichte en zware regen, automatische openingstab, behoud van handmatige keuze, locatie-wissels en vertraagde antwoorden.
+- Live integratiechecks voor Buienradar en Open-Meteo, inclusief regen, wind en gevoelstemperatuur per uur.
+- Universele Release-build voor x86_64 en arm64. Sparkle 2.10.0 als vastgepinde package; framework en helpers in de app.
+- Indeling gecontroleerd met afzonderlijke SwiftUI-renders van de compacte regen- en weerinhoud en dagdetails. Native glas, segmented controls en scrollinhoud zijn daarin niet volledig renderbaar; dit is geen volledige native UI-test.
+- Debuggegevens uit de eigen executable verwijderd en app opnieuw ad-hoc ondertekend. Bundlehandtekeningen en beide architecturen gecontroleerd.
+- Feed en archief ondertekend via Ed25519; beide verplicht gecontroleerd door de updater. Privésleutel in login-sleutelhanger en Actions-secret, buiten broncode.
+- Releaseworkflow bouwt en test op macos-26 bij nieuwe tags; publiceert ZIP, ondertekende appcast en checksums.
+
+De eerste installatie is niet door Apple genotariseerd. Versie 1.1.0 moet eenmalig handmatig worden vervangen; die versie bevat nog geen updater. Lokaal gewijzigde broncode wordt pas een update op andere Macs nadat een nieuwe GitHub-release is gepubliceerd.
+
+---
+
 # Releasecontrole 1.1.0
 
 De fork voegt Nederlandse bediening, twee tabs voor regen en weer, temperatuur in de menubalk en een download voor Intel en Apple Silicon toe. Controle uitgevoerd op 6 oktober 2026.

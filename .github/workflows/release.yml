@@ -1,0 +1,49 @@
+name: Build and publish RainBar
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+concurrency:
+  group: rainbar-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'perhorst1234/rain_app'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Build, test and sign universal release
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SPARKLE_PRIVATE_KEY"
+          export SPARKLE_KEY_FILE="$RUNNER_TEMP/rainbar-signing.key"
+          trap 'rm -f "$SPARKLE_KEY_FILE"' EXIT
+          umask 077
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$SPARKLE_KEY_FILE"
+          unset SPARKLE_PRIVATE_KEY
+          Scripts/build-release.sh
+      - name: Publish signed GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' RainBar/Info.plist)
+          dir="build/release-v$version"
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          Nederlandse RainBar voor macOS 26+, Intel en Apple Silicon.
+          Compacte tabs Regen/Weer, zichtbare lichte regen en klikbare dagdetails.
+          Ondertekende automatische updates via Sparkle. Installeer deze versie eenmaal op iedere Mac; volgende releases komen automatisch binnen.
+          Pak de ZIP uit en zet RainBar.app in Programma’s. Persoonlijke ad-hoc build, niet door Apple genotariseerd.
+          NOTES
+          gh release create "$RELEASE_TAG" --verify-tag --title "RainBar NL $version" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            "$dir/RainBar-NL-v$version-universal.zip" "$dir/appcast.xml" "$dir/SHA256SUMS.txt"

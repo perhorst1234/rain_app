@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        AA000009 = {isa = PBXBuildFile; fileRef = AA00001A; };
+        AA000008 = {isa = PBXBuildFile; productRef = AA000071; };
         AA000006 = {isa = PBXBuildFile; fileRef = AA000018; };
         AA000007 = {isa = PBXBuildFile; fileRef = AA000019; };
 		AA000001 /* RainBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000011 /* RainBarApp.swift */; };
@@ -17,6 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        AA00001A = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
         AA000018 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherService.swift; sourceTree = "<group>"; };
         AA000019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherView.swift; sourceTree = "<group>"; };
 		AA000010 /* RainBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RainBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -34,6 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                AA000008 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +63,7 @@
                 AA000019 /* WeatherView.swift */,
 				AA000014 /* Assets.xcassets */,
 				AA000015 /* Info.plist */,
+                AA00001A /* ThirdPartyNotices.txt */,
 				AA000016 /* RainBar.entitlements */,
 			);
 			path = RainBar;
@@ -87,7 +92,8 @@
 			);
 			dependencies = (
 			);
-			name = RainBar;
+			packageProductDependencies = (AA000071);
+            name = RainBar;
 			productName = RainBar;
 			productReference = AA000010 /* RainBar.app */;
 			productType = "com.apple.product-type.application";
@@ -117,7 +123,8 @@
 			);
 			mainGroup = AA000030;
 			productRefGroup = AA000032 /* Products */;
-			projectDirPath = "";
+			packageReferences = (AA000070);
+            projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				AA000040 /* RainBar */,
@@ -131,6 +138,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000004 /* Assets.xcassets in Resources */,
+                AA000009 /* ThirdPartyNotices.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -276,7 +284,7 @@
 				CODE_SIGN_ENTITLEMENTS = RainBar/RainBar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RainBar/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -285,7 +293,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rainbar.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -300,7 +308,7 @@
 				CODE_SIGN_ENTITLEMENTS = RainBar/RainBar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RainBar/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -309,7 +317,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rainbar.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -340,6 +348,8 @@
 		};
 /* End XCConfigurationList section */
 
+        AA000070 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/sparkle-project/Sparkle"; requirement = {kind = exactVersion; version = 2.10.0; }; };
+        AA000071 = {isa = XCSwiftPackageProductDependency; package = AA000070; productName = Sparkle; };
 	};
 	rootObject = AA000050 /* Project object */;
 }
