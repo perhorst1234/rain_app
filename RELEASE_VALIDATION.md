@@ -2,9 +2,9 @@
 
 Controle uitgevoerd op 7 oktober 2026. Deze versie herstelt de schaal voor lichte regen, plaatst tabs in de bovenbalk, laat de vensterhoogte aansluiten op de inhoud, kiest de openingstab op basis van regen en voegt klikbare dagdetails en Sparkle-updates toe.
 
-CodeRabbit raised 0 issues in de review van appwijzigingen, tests, scripts, package-lock en releaseworkflow. Na de review zijn de laatste aslabels expliciet zichtbaar gemaakt, is automatische tabkeuze beperkt tot de eerste verse voorspelling per opening, is menuvalidatie expliciet ingesteld en is de lipo-argumentvolgorde in het release-script gecorrigeerd. De laatste universele build en 32 offline functionele checks zijn geslaagd. De volledige set van 35 checks, inclusief drie live integratiechecks, wordt voor publicatie nogmaals uitgevoerd. Native NSHostingController bevestigt hoogtes van 375 px (Regen) en 518 px (Weer), beide 500 px breed.
+CodeRabbit raised 0 issues in de review van appwijzigingen, tests, scripts, package-lock en releaseworkflow. Na de review zijn de laatste aslabels expliciet zichtbaar gemaakt, is automatische tabkeuze beperkt tot de eerste verse voorspelling per opening, is menuvalidatie expliciet ingesteld en is de lipo-argumentvolgorde in het release-script gecorrigeerd. De laatste universele build en 32 offline functionele checks zijn geslaagd. Alle 35 functionele checks zijn geslaagd, inclusief drie live integratiechecks. Native NSHostingController bevestigt hoogtes van 375 px (Regen) en 518 px (Weer), beide 500 px breed.
 
-De tweede CodeRabbit-review gaf twee minor opmerkingen: de nog voorlopige validatietekst bijwerken zodra controles klaar zijn, en de volledige dagrij klikbaar maken met `contentShape(Rectangle())`. De dagrij is aangepast; de validatietekst wordt gebaseerd op de uitgevoerde controles.
+De tweede CodeRabbit-review gaf twee minor opmerkingen: de nog voorlopige validatietekst bijwerken zodra controles klaar zijn, en de volledige dagrij klikbaar maken met `contentShape(Rectangle())`. De dagrij is aangepast; de validatietekst is bijgewerkt met de uitgevoerde controles.
 
 ## Controles
 
@@ -14,7 +14,11 @@ De tweede CodeRabbit-review gaf twee minor opmerkingen: de nog voorlopige valida
 - Indeling gecontroleerd met afzonderlijke SwiftUI-renders van de compacte regen- en weerinhoud en dagdetails. Native glas, segmented controls en scrollinhoud zijn daarin niet volledig renderbaar; dit is geen volledige native UI-test.
 - Debuggegevens uit de eigen executable verwijderd en app opnieuw ad-hoc ondertekend. Bundlehandtekeningen en beide architecturen gecontroleerd.
 - Feed en archief ondertekend via Ed25519; beide verplicht gecontroleerd door de updater. Privésleutel in login-sleutelhanger en Actions-secret, buiten broncode.
-- Releaseworkflow bouwt en test op macos-26 bij nieuwe tags; publiceert ZIP, ondertekende appcast en checksums.
+- [GitHub Actions-run 37667859721](https://github.com/perhorst1234/rain_app/actions/runs/37667859721) geslaagd op Apple Silicon (`macos-26`, Xcode 26.6): 32 offline functionele checks, universele build, handtekeningen en publicatie.
+- Gepubliceerde ZIP en feed opnieuw gedownload en checksums gecontroleerd; CryptoKit accepteert beide met de publieke sleutel uit de app en wijst gewijzigde versies af.
+- Sparkle zelf gestart tegen een lokale build 3: automatische controles en downloads actief, interval 3600 seconden. De echte ondertekende GitHub-feed werd geaccepteerd en update 1.2.1 (build 4) herkend. De update-installatie op een tweede Mac is niet rechtstreeks getest.
+- Gepubliceerde versie 1.2.1 geïnstalleerd en gestart op deze Intel-Hackintosh. Oude app bewaard buiten Programma’s. Native app niet op Apple Silicon-hardware geopend; modelchecks daar wel via CI uitgevoerd.
+- SHA-256 ZIP: `3c2c55497bc81538233118250856edb10e28ec45e0beabf0a83aa50675f9743e`.
 
 De eerste installatie is niet door Apple genotariseerd. Versie 1.1.0 moet eenmalig handmatig worden vervangen; die versie bevat nog geen updater. Lokaal gewijzigde broncode wordt pas een update op andere Macs nadat een nieuwe GitHub-release is gepubliceerd.
 
